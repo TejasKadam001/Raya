@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Model Weights
+*.pt
+*.pth
+checkpoints/
+
+# Data
+data/
+*.txt
+*.csv
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.eslintcache
+
+# Env / Secrets
+.env
+.venv
+venv/
+ENV/
+
+# System
+.DS_Store
+Thumbs.db
