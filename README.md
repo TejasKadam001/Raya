@@ -1,183 +1,238 @@
-# Raya AI: A Comprehensive Autoregressive Transformer Implementation
+# Raya AI: 124M Parameter Transformer Model from Scratch
 
-Raya AI embodies a fully custom-developed autoregressive transformer decoder, engineered from fundamental principles to exemplify advanced deep learning techniques in sequence modeling. This 124 million parameter model operates as a 12-layer decoder-only architecture, leveraging causal self-attention mechanisms to generate coherent, contextually rich text sequences. The implementation prioritizes architectural purity, eschewing pre-trained components in favor of end-to-end training on curated datasets, resulting in a robust language model capable of capturing intricate linguistic patterns and dependencies.
+Raya AI is an industrial-grade, 124-million parameter decoder-only transformer language model engineered entirely from first principles. Designed to bridge state-of-the-art neural architecture research with production deployment, Raya AI features zero pre-trained weights, custom BPE tokenization, a 12-layer decoder architecture, dynamic sequence packing on WikiText-103, a high-throughput FastAPI inference server with key-value (KV) caching, and a React-driven user interface.
 
-![Raya Landing Page](assets/hero.png)
+---
 
-## Architectural Deep Dive
+## Executive Summary and Technical Goals
 
-### Layer-by-Layer Analysis
-The 12-layer architecture progressively refines representations:
+### Core Objectives
+1. **First-Principles Neural Architecture**: Construct a functional 124M parameter transformer model in PyTorch without relying on pre-trained HuggingFace or OpenAI weights.
+2. **End-to-End Pipeline**: Implement raw text ingestion, data sanitization, Byte-Pair Encoding (BPE), causal self-attention, autoregressive text generation, and web deployment.
+3. **Optimized Inference**: Integrate key-value (KV) attention caching within the generation loop to reduce autoregressive sampling complexity from quadratic to linear relative to context length.
+4. **Full-Stack Interface**: Build a responsive React web client connected via asynchronous HTTP streaming to monitor token probabilities, generation latency, and hyperparameter controls.
 
-- **Layers 1-4**: Focus on local syntactic structures, learning basic token relationships and grammatical patterns through shallow attention.
-- **Layers 5-8**: Capture intermediate semantic dependencies, integrating contextual information across sentences.
-- **Layers 9-12**: Model high-level discourse coherence, enabling long-range reasoning and thematic consistency.
+---
 
-Each layer's attention mechanism dynamically allocates focus: early layers exhibit broader attention distributions, while deeper layers develop sparse, task-specific patterns.
+## System Architecture
 
-### Hyperparameter Rationale
-- **Model Dimension (768)**: Balances expressiveness with computational efficiency; larger dimensions (e.g., 1024) increase capacity but exponentially raise memory requirements.
-- **Head Count (12)**: Optimal for parallel computation; fewer heads reduce diversity, more increase overhead without proportional gains.
-- **Feed-Forward Expansion (4x)**: Empirically determined ratio providing sufficient non-linearity; smaller ratios limit representational power.
-- **Sequence Length (512)**: Constrains context window to manage memory; longer sequences improve coherence but complicate training stability.
-- **Dropout Rate (0.1)**: Prevents overfitting in large datasets; higher rates (0.2) enhance generalization but may underfit.
+```mermaid
+graph TD
+    subgraph Data_Pipeline ["1. Data Ingestion & Sanitization Layer"]
+        RAW["WikiText-103 Corpus"] --> CLEAN["Text Sanitization & Deduplication"]
+        CLEAN --> BPE["Tiktoken BPE Tokenizer (V = 50,257)"]
+        BPE --> PACK["Dynamic Sequence Packing (Block Size = 1024)"]
+    end
 
-### Impact of Design Choices on Performance
-- **Causal Masking**: Enforces unidirectional flow, critical for autoregressive generation; absent masking leads to information leakage and incoherent outputs.
-- **Residual Connections**: Enable gradient propagation in deep networks; removal causes vanishing gradients and training instability.
-- **Layer Normalization**: Stabilizes activations across batches; batch normalization alternatives fail in sequence tasks due to variable lengths.
-- **Weight Tying**: Reduces parameter count by 10-15%; improves generalization through shared representations.
-- **Multi-Head Attention**: Decomposes attention into subspaces, capturing diverse linguistic aspects simultaneously.
+    subgraph Neural_Engine ["2. Neural Transformer Model Layer"]
+        PACK --> EMB["Token & Learned Positional Embeddings"]
+        EMB --> BLOCKS["12x Decoder Transformer Blocks"]
+        BLOCKS --> LN["Final Layer Normalization"]
+        LN --> HEAD["Linear LM Head Projection"]
+    end
 
-## Training Methodology
+    subgraph Inference_Service ["3. FastAPI Microservice & KV-Cache"]
+        HEAD --> FASTAPI["FastAPI REST & Streaming Server"]
+        FASTAPI --> KV["Key-Value Cache Memory Manager"]
+        FASTAPI --> SAMPLER["Temperature / Top-K / Top-P Sampler"]
+    end
 
-### Data Pipeline and Preprocessing
-Training leverages WikiText-103, a 103 million token corpus, subjected to aggressive cleaning:
+    subgraph Frontend_Client ["4. User Interface Layer"]
+        SAMPLER --> REACT["React SPA User Interface"]
+        REACT --> HEATMAP["Token Probability Inspector"]
+        REACT --> CONTROLS["Hyperparameter Control Panel"]
+    end
 
-- **Noise Removal**: Eliminates HTML artifacts, URLs, and non-ASCII characters.
-- **Repetition Filtering**: Discards lines with excessive character repetition (e.g., separator lines).
-- **Sequence Chunking**: Sliding window approach generates overlapping sequences of 512 tokens.
-- **Deduplication**: Removes near-identical passages to prevent memorization.
-
-This preprocessing reduces repetitive outputs by 40-50% compared to raw data.
-
-### Optimization Strategy
-- **AdamW Optimizer**: Combines adaptive learning with weight decay for regularization.
-- **Cosine Annealing**: Gradually decays learning rate from 3e-4 to 0, promoting convergence.
-- **Gradient Accumulation**: Effective batch size of 48 (12 × 4 steps) stabilizes training on limited hardware.
-- **Gradient Clipping**: Threshold of 1.0 prevents exploding gradients in deep architectures.
-- **Mixed Precision**: FP16 training accelerates convergence while maintaining numerical stability.
-
-### Training Dynamics
-The model converges after 8-10 epochs, with validation perplexity stabilizing around 15-20. Early epochs focus on syntactic learning, while later phases refine semantic understanding. Loss curves exhibit characteristic U-shape, with initial rapid descent followed by plateauing.
-
-## Evaluation and Performance
-
-### Quantitative Metrics
-- **Perplexity**: 18.7 on WikiText-103 validation set, indicating strong language modeling capability.
-- **BLEU Score**: 0.45 on machine translation tasks, demonstrating transfer learning potential.
-- **Generation Diversity**: Distinct-1/2 scores of 0.85/0.72, surpassing baselines in reducing repetition.
-
-### Qualitative Assessment
-Generated samples exhibit coherent narratives, maintaining topic consistency over 200+ tokens. The model excels in creative writing tasks, producing stylistically diverse outputs.
-
-### Comparative Analysis
-Benchmarked against GPT-2 Small (117M parameters):
-- **Perplexity**: Raya AI achieves 18.7 vs. GPT-2's 18.3, with superior handling of long contexts.
-- **Parameter Efficiency**: 6% fewer parameters yet comparable performance, attributed to optimized architecture.
-- **Training Stability**: Custom implementation avoids pre-training artifacts, resulting in cleaner generation.
-
-## Ablation Studies
-
-### Layer Depth Impact
-Reducing layers to 6 decreases perplexity by 15% but impairs long-range coherence. Increasing to 18 layers improves performance marginally (+2%) but triples training time.
-
-### Attention Head Variations
-8 heads reduce capacity by 20%, while 16 heads yield <1% improvement, confirming 12 as optimal.
-
-### Feed-Forward Scaling
-Halving d_ff (1536) degrades performance by 25%, validating the 4x expansion ratio.
-
-### Dropout Sensitivity
-Increasing to 0.2 enhances generalization but slows convergence; 0.05 leads to overfitting.
-
-## Technical Implementation Details
-
-### Backend Architecture
-- **PyTorch Framework**: Leverages dynamic computation graphs for flexible model definition.
-- **FastAPI Integration**: RESTful endpoints with async processing for concurrent requests.
-- **Multi-Device Support**: Automatic detection of CUDA/MPS/CPU, with optimized kernels.
-- **Memory Management**: Gradient checkpointing reduces VRAM footprint by 30%.
-
-### Frontend Engineering
-- **React Ecosystem**: Component-based architecture with Vite for rapid development.
-- **State Management**: Context API for real-time chat state synchronization.
-- **Animation Framework**: CSS transitions with hardware acceleration for smooth UX.
-- **Responsive Design**: Adaptive layouts supporting desktop and mobile interfaces.
-
-### Inference Optimization
-- **KV-Caching**: Stores attention keys/values for O(1) per-token generation.
-- **Temperature Sampling**: Controls output randomness (T=0.8 for balanced creativity).
-- **Top-K Filtering**: Limits sampling to top 50 tokens, reducing nonsensical outputs.
-- **Batch Processing**: Parallel generation for multiple users.
-
-## File Structure and Modularity
-
-```
-.
-├── app.py               # FastAPI server with inference endpoints and error handling
-├── model.py             # Modular transformer implementation with custom attention
-├── config.py            # Dataclass-based configuration for reproducibility
-├── dataset.py           # Robust data pipeline with cleaning and augmentation
-├── train.py             # Comprehensive training loop with logging and checkpointing
-├── raya_colab_trainer.py # Self-contained Colab script with dependency management
-├── tokenizer.py         # GPT-2 tokenizer wrapper with encoding/decoding utilities
-├── code_gpt_e3.pt       # Serialized model state (650MB, FP32 precision)
-└── frontend/            # Production-ready React application
-    ├── src/
-    │   ├── components/  # Reusable UI components
-    │   ├── hooks/       # Custom React hooks for state management
-    │   ├── utils/       # Helper functions and constants
-    │   └── App.jsx      # Main application component
-    ├── public/          # Static assets and favicons
-    └── package.json     # Dependency manifest with build scripts
+    classDef default fill:#18181b,stroke:#3f3f46,stroke-width:1.5px,color:#f4f4f5;
+    classDef highlight fill:#09090b,stroke:#6366f1,stroke-width:1.5px,color:#ffffff;
 ```
 
-## Deployment and Usage
+---
 
-### Backend Deployment
+## Neural Architecture Specifications
+
+### Model Parameters and Hyperparameters
+
+| Metric / Parameter | Value / Configuration | Description |
+| :--- | :--- | :--- |
+| **Total Parameters** | $124,439,808$ ($124\text{M}$) | 12-layer decoder-only transformer architecture |
+| **Vocabulary Size ($V$)** | $50,257$ | Byte-Pair Encoding (BPE) vocabulary |
+| **Context Window ($T$)** | $1,024$ tokens | Maximum sequence block length |
+| **Embedding Dimension ($d_{\text{model}}$)** | $768$ | Hidden state vector dimension |
+| **Number of Layers ($L$)** | $12$ | Stacked transformer decoder blocks |
+| **Attention Heads ($n_{\text{head}}$)** | $12$ | Multi-head self-attention heads |
+| **Head Dimension ($d_k$)** | $64$ | $d_{\text{model}} / n_{\text{head}} = 768 / 12$ |
+| **Feed-Forward Dimension ($d_{\text{ff}}$)** | $3,072$ | $4 \times d_{\text{model}}$ inner MLP expansion layer |
+| **Activation Function** | GELU | Gaussian Error Linear Unit ($\text{GELU}$) |
+| **Layer Normalization** | Pre-LN | Applied prior to attention and MLP blocks |
+
+---
+
+## Transformer Decoder Block Architecture
+
+```mermaid
+flowchart TD
+    INPUT["Input Token IDs [Batch, Seq_Len]"] --> EMB["Token Embedding Matrix (V x d_model)"]
+    POS["Positional Indices [0 ... Seq_Len-1]"] --> POS_EMB["Learned Positional Matrix (T x d_model)"]
+    
+    EMB --> SUM["Sum Embeddings x = E_tok + E_pos"]
+    POS_EMB --> SUM
+    
+    subgraph Decoder_Block ["Transformer Decoder Block (x12 Layers)"]
+        SUM --> LN1["LayerNorm 1"]
+        LN1 --> QKV["QKV Linear Projections W_q, W_k, W_v"]
+        QKV --> MHA["Causal Masked Multi-Head Attention"]
+        MHA --> PROJ1["Output Projection W_o"]
+        PROJ1 --> RES1["Residual Addition: x = x + Attention(LN1(x))"]
+        
+        RES1 --> LN2["LayerNorm 2"]
+        LN2 --> FCF1["Linear Layer 1 (d_model -> 4 * d_model)"]
+        FCF1 --> ACT["GELU Activation"]
+        ACT --> FCF2["Linear Layer 2 (4 * d_model -> d_model)"]
+        FCF2 --> RES2["Residual Addition: x = x + MLP(LN2(x))"]
+    end
+
+    RES2 --> FINAL_LN["Final LayerNorm"]
+    FINAL_LN --> LM_HEAD["Linear LM Head (d_model -> V)"]
+    LM_HEAD --> LOGITS["Output Logits [Batch, Seq_Len, V]"]
+```
+
+---
+
+## Mathematical Formulation
+
+### 1. Causal Scaled Dot-Product Attention
+Given input query $Q \in \mathbb{R}^{T \times d_k}$, key $K \in \mathbb{R}^{T \times d_k}$, and value $V \in \mathbb{R}^{T \times d_v}$, attention is calculated as:
+
+$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{Q K^T}{\sqrt{d_k}} + M\right) V$$
+
+Where $M$ is the lower-triangular causal mask matrix:
+
+$$M_{i,j} = \begin{cases} 0 & \text{if } i \ge j \\ -\infty & \text{if } i < j \end{cases}$$
+
+### 2. Multi-Head Attention Fusion
+$$\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O$$
+
+$$\text{head}_i = \text{Attention}(Q W_i^Q, K W_i^K, V W_i^V)$$
+
+### 3. Layer Normalization
+$$\text{LN}(x) = \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} \odot \gamma + \beta$$
+
+---
+
+## Autoregressive Sampling and KV-Cache Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as React Web App
+    participant Server as FastAPI Server (Port 8000)
+    participant Model as PyTorch Transformer Engine
+    participant Cache as Key-Value (KV) Cache Memory
+
+    Client->>Server: POST /generate { prompt: "The nature of intelligence", max_tokens: 50, temp: 0.7 }
+    Server->>Model: Encode Prompt -> Token IDs [t1, t2, ..., tn]
+    
+    rect rgb(24, 24, 27)
+        note over Model, Cache: Prefill Phase
+        Model->>Cache: Compute Keys & Values for Prompt Tokens
+        Cache-->>Model: Store K_prompt, V_prompt
+        Model-->>Server: Output Initial Logits & Predict Next Token t_(n+1)
+        Server-->>Client: Stream Token t_(n+1)
+    end
+
+    rect rgb(39, 39, 42)
+        note over Model, Cache: Autoregressive Decoding Loop (Token by Token)
+        loop For step = 1 to max_tokens
+            Server->>Model: Pass Only Last Token t_(n+i)
+            Model->>Cache: Fetch Historical Keys & Values
+            Model->>Cache: Append New Key K_(n+i) & Value V_(n+i)
+            Model-->>Server: Predict Token t_(n+i+1) via Top-P Sampling
+            Server-->>Client: Stream Token t_(n+i+1)
+        end
+    end
+```
+
+---
+
+## Directory Structure
+
+```
+Raya/
+├── README.md                           # Technical Architecture Documentation
+├── train.py                            # PyTorch Model Training Loop & Loss Evaluation
+├── model.py                            # Custom 124M Transformer Decoder Implementation
+├── dataset.py                          # WikiText-103 Data Loader & Tokenizer Pipeline
+├── generate.py                         # KV-Cache Accelerated Autoregressive Sampler
+├── requirements.txt                    # Python Dependencies
+├── main.py                             # FastAPI Streaming Microservice Endpoint
+└── web/                                # React SPA Dashboard
+    ├── package.json                    # Node Dependencies
+    ├── vite.config.js                  # Vite Bundler Setup
+    └── src/
+        ├── App.jsx                     # Core Generation Interface & Token Inspector
+        └── components/
+            ├── ParameterControls.jsx   # Temperature, Top-K, Top-P Sliders
+            └── TokenProbViewer.jsx     # Real-Time Probability Distribution Chart
+```
+
+---
+
+## Installation and Setup Guide
+
+### Prerequisites
+- **Python**: v3.10 or higher
+- **Node.js**: v18.0.0 or higher
+- **CUDA**: Recommended for GPU acceleration
+
+---
+
+### Step 1. Clone Repository and Install Python Dependencies
+
 ```bash
-pip install torch==2.0.1 fastapi==0.104.1 uvicorn==0.24.0 tiktoken==0.5.1
-python app.py
+git clone https://github.com/TejasKadam001/Raya.git
+cd Raya
+
+# Install Python requirements
+pip install torch tiktoken fastapi uvicorn torchvision numpy
 ```
 
-### Frontend Development
+---
+
+### Step 2. Execute Training or Autoregressive Sampling
+
+To run model training on WikiText-103:
+
 ```bash
-cd frontend
+python3 train.py
+```
+
+To run standalone generation in CLI:
+
+```bash
+python3 generate.py --prompt "Artificial intelligence systems" --max_tokens 100 --temperature 0.8
+```
+
+---
+
+### Step 3. Launch FastAPI Microservice and React Frontend
+
+Start the backend API server:
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Start the React web application:
+
+```bash
+cd web
 npm install
-npm run dev  # Development server with hot reload
-npm run build  # Production build optimization
+npm run dev
 ```
 
-### Custom Training Pipeline
-Execute distributed training:
-```bash
-python train.py --config custom_config.yaml
-```
+Open your browser and navigate to `http://localhost:5173`.
 
-Colab alternative:
-```python
-# Upload raya_colab_trainer.py to Colab
-!python raya_colab_trainer.py
-```
+---
 
-### Model Fine-Tuning
-Adapt for domain-specific tasks:
-```python
-from model import GPT
-model = GPT.load_from_checkpoint('code_gpt_e3.pt')
-# Implement fine-tuning loop with task-specific data
-```
-
-## Limitations and Future Directions
-
-### Current Constraints
-- **Context Window**: 512 tokens limit long-document understanding; future versions will extend to 2048+.
-- **Multilingual Support**: English-only training; expansion to multilingual corpora planned.
-- **Computational Requirements**: 124M parameters demand significant GPU memory; quantization techniques under development.
-- **Evaluation Scope**: Limited to language modeling metrics; human evaluation studies forthcoming.
-
-### Research Extensions
-- **Sparse Attention**: Implement BigBird-style mechanisms for linear-time long-range attention.
-- **Knowledge Integration**: Incorporate external knowledge bases for factual grounding.
-- **Multimodal Fusion**: Extend to vision-language tasks via cross-modal transformers.
-- **Efficient Architectures**: Explore distillation and pruning for edge deployment.
-
-## Acknowledgments and References
-
-This implementation draws inspiration from seminal works:
-- Vaswani et al. (2017): "Attention is All You Need"
-- Radford et al. (2019): "Language Models are Few-Shot Learners"
-- Brown et al. (2020): "Language Models are Few-Shot Learners"
-
-Built with dedication to advancing open-source AI research, Raya AI serves as a testament to the power of custom implementations in understanding and improving transformer architectures.
+Engineered for deep learning research and high-performance neural deployment.
